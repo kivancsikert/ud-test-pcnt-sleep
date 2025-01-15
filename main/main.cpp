@@ -12,6 +12,8 @@
 #include <esp_timer.h>
 
 #include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
 
 #include <neopixel.h>
 
@@ -31,6 +33,8 @@ static const gpio_num_t rgbLedGpio = GPIO_NUM_8;
 static const gpio_num_t ledGpio = GPIO_NUM_23;
 static const gpio_num_t buttonGpio = GPIO_NUM_3;
 
+static QueueHandle_t buttonQueue = xQueueCreate(10, sizeof(bool));
+
 // static tNeopixelContext neopixel = neopixel_Init(1, rgbLedGpio);
 // static tNeopixel off = { 0, NP_RGB(0, 0, 0) };
 // static tNeopixel red = { 0, NP_RGB(50, 0, 0) };
@@ -45,8 +49,9 @@ void timerCallback(void* arg) {
     timerRunning = false;
 }
 
-void interruptHandler(void* arg) {
-    counter++;
+static void IRAM_ATTR interruptHandler(void* arg) {
+    bool pressed = true;
+    xQueueSendFromISR(buttonQueue, &pressed, NULL);
     // bool currentState = rtc_gpio_get_level(buttonGpio);
     // if (currentState) {
     //     if (!previousState) {
@@ -66,6 +71,18 @@ void interruptHandler(void* arg) {
     //     }
     // }
     // previousState = currentState;
+}
+
+static void buttonHandlerTask(void* arg) {
+    bool buttonState;
+
+    while (true) {
+        // Wait for a button press event
+        if (xQueueReceive(buttonQueue, &buttonState, portMAX_DELAY)) {
+            // Print the received button state
+            ESP_LOGI("main", "Button pressed: %s", buttonState ? "true" : "false");
+        }
+    }
 }
 
 extern "C" void app_main() {
@@ -130,6 +147,8 @@ extern "C" void app_main() {
     esp_sleep_enable_gpio_wakeup();
 
     gpio_isr_handler_add(buttonGpio, interruptHandler, nullptr);
+
+    xTaskCreate(&buttonHandlerTask, "button-handler", 2048, nullptr, 1, NULL);
 
     auto startTime = high_resolution_clock::now();
     while (true) {
