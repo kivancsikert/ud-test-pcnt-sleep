@@ -117,8 +117,7 @@ extern "C" void app_main() {
 
     rtc_gpio_init(buttonGpio);
     rtc_gpio_set_direction(buttonGpio, RTC_GPIO_MODE_INPUT_ONLY);
-    rtc_gpio_pullup_en(buttonGpio);
-    rtc_gpio_wakeup_enable(buttonGpio, GPIO_INTR_LOW_LEVEL);
+    // rtc_gpio_pulldown_en(buttonGpio);
     esp_sleep_enable_gpio_wakeup();
 
     gpio_isr_handler_add(buttonGpio, interruptHandler, nullptr);
