@@ -6,5 +6,3 @@ cmake_minimum_required(VERSION 3.5)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(esp-idf-interrupt-test)
-
-add_compile_options("-Wno-missing-field-initializers")
