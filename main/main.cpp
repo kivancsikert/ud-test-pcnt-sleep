@@ -39,9 +39,13 @@ void timerCallback(void* arg) {
     timerRunning = false;
 }
 
-static void IRAM_ATTR interruptHandler(void* arg) {
+static void handleStateChange() {
     bool currentState = rtc_gpio_get_level(buttonGpio);
     xQueueSendFromISR(buttonQueue, &currentState, NULL);
+}
+
+static void IRAM_ATTR interruptHandler(void* arg) {
+    handleStateChange();
 }
 
 static void buttonHandlerTask(void* arg) {
@@ -51,8 +55,7 @@ static void buttonHandlerTask(void* arg) {
     while (true) {
         // Wait for a button press event
         if (xQueueReceive(buttonQueue, &buttonState, portMAX_DELAY)) {
-            // Print the received button state
-            // ESP_LOGI("main", "Button pressed: %s", buttonState ? "true" : "false");
+            ESP_LOGV("main", "Button pressed: %s", buttonState ? "true" : "false");
             rtc_gpio_wakeup_enable(buttonGpio, buttonState ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
             if (previousState != buttonState) {
                 previousState = buttonState;
@@ -117,12 +120,14 @@ extern "C" void app_main() {
 
     rtc_gpio_init(buttonGpio);
     rtc_gpio_set_direction(buttonGpio, RTC_GPIO_MODE_INPUT_ONLY);
-    // rtc_gpio_pulldown_en(buttonGpio);
     esp_sleep_enable_gpio_wakeup();
 
     gpio_isr_handler_add(buttonGpio, interruptHandler, nullptr);
 
     xTaskCreate(&buttonHandlerTask, "button-handler", 2048, nullptr, 1, NULL);
+
+    // Set the correct wakeup state on boot
+    handleStateChange();
 
     auto startTime = high_resolution_clock::now();
     while (true) {
