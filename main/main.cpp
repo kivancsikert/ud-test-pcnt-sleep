@@ -15,8 +15,6 @@
 #include <freertos/queue.h>
 #include <freertos/task.h>
 
-#include <neopixel.h>
-
 using namespace std::chrono;
 
 bool previousState = false;
@@ -29,18 +27,10 @@ esp_pm_lock_handle_t noSleep;
 bool timerRunning = false;
 esp_timer_handle_t timer = nullptr;
 
-static const gpio_num_t rgbLedGpio = GPIO_NUM_8;
 static const gpio_num_t ledGpio = GPIO_NUM_23;
 static const gpio_num_t buttonGpio = GPIO_NUM_3;
 
 static QueueHandle_t buttonQueue = xQueueCreate(10, sizeof(bool));
-
-// static tNeopixelContext neopixel = neopixel_Init(1, rgbLedGpio);
-// static tNeopixel off = { 0, NP_RGB(0, 0, 0) };
-// static tNeopixel red = { 0, NP_RGB(50, 0, 0) };
-// static tNeopixel green = { 0, NP_RGB(0, 50, 0) };
-// static tNeopixel blue = { 0, NP_RGB(0, 0, 50) };
-// static tNeopixel white = { 0, NP_RGB(17, 17, 17) };
 
 void timerCallback(void* arg) {
     ESP_LOGI("main", "Timer expired, allowing light sleep");
@@ -75,11 +65,6 @@ static void buttonHandlerTask(void* arg) {
 }
 
 extern "C" void app_main() {
-    // neopixel_SetPixel(neopixel, &red, 1);
-    // neopixel_SetPixel(neopixel, &green, 1);
-    // neopixel_SetPixel(neopixel, &blue, 1);
-    // neopixel_SetPixel(neopixel, &white, 1);
-
     // Set up GPIO for the LED
     gpio_config_t ledConfig = {
         .pin_bit_mask = 1ULL << ledGpio,
