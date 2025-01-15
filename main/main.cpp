@@ -50,37 +50,26 @@ void timerCallback(void* arg) {
 }
 
 static void IRAM_ATTR interruptHandler(void* arg) {
-    bool pressed = true;
-    xQueueSendFromISR(buttonQueue, &pressed, NULL);
-    // bool currentState = rtc_gpio_get_level(buttonGpio);
-    // if (currentState) {
-    //     if (!previousState) {
-    //         ESP_ERROR_CHECK(esp_pm_lock_acquire(noSleep));
-    //         if (timerRunning) {
-    //             ESP_ERROR_CHECK(esp_timer_stop(timer));
-    //         }
-    //         esp_timer_start_once(timer, duration_cast<microseconds>(200ms).count());
-    //         timerRunning = true;
-    //     }
-    // } else {
-    //     if (previousState) {
-    //         counter++;
-    //         ESP_ERROR_CHECK(esp_pm_lock_release(noSleep));
-    //         esp_timer_stop(timer);
-    //         timerRunning = false;
-    //     }
-    // }
-    // previousState = currentState;
+    bool currentState = rtc_gpio_get_level(buttonGpio);
+    xQueueSendFromISR(buttonQueue, &currentState, NULL);
 }
 
 static void buttonHandlerTask(void* arg) {
     bool buttonState;
+    bool previousState = true;
 
     while (true) {
         // Wait for a button press event
         if (xQueueReceive(buttonQueue, &buttonState, portMAX_DELAY)) {
             // Print the received button state
             ESP_LOGI("main", "Button pressed: %s", buttonState ? "true" : "false");
+            rtc_gpio_wakeup_enable(buttonGpio, buttonState ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
+            if (previousState != buttonState) {
+                previousState = buttonState;
+                if (buttonState) {
+                    counter++;
+                }
+            }
         }
     }
 }
@@ -109,6 +98,15 @@ extern "C" void app_main() {
             return ESP_OK; },
         .exit_cb = [](int64_t timeSleptInUs, void* arg) {
             gpio_set_level(ledGpio, 0);
+            switch (esp_sleep_get_wakeup_cause()) {
+                case ESP_SLEEP_WAKEUP_GPIO: {
+                    interruptHandler(nullptr);
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
             sleepDurationInUs += timeSleptInUs;
             sleepCount++;
             return ESP_OK; },
@@ -118,7 +116,7 @@ extern "C" void app_main() {
     esp_pm_config_t pm_config = {
         .max_freq_mhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
         .min_freq_mhz = CONFIG_XTAL_FREQ,
-        .light_sleep_enable = false,
+        .light_sleep_enable = true,
     };
     ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
 
@@ -132,18 +130,10 @@ extern "C" void app_main() {
 
     gpio_install_isr_service(0);
 
-    gpio_config_t config = {
-        .pin_bit_mask = 1ULL << buttonGpio,
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_ANYEDGE,
-    };
-    gpio_config(&config);
-
-    gpio_sleep_sel_dis(buttonGpio);
-
-    rtc_gpio_wakeup_enable(buttonGpio, GPIO_INTR_HIGH_LEVEL);
+    rtc_gpio_init(buttonGpio);
+    rtc_gpio_set_direction(buttonGpio, RTC_GPIO_MODE_INPUT_ONLY);
+    rtc_gpio_pullup_en(buttonGpio);
+    rtc_gpio_wakeup_enable(buttonGpio, GPIO_INTR_LOW_LEVEL);
     esp_sleep_enable_gpio_wakeup();
 
     gpio_isr_handler_add(buttonGpio, interruptHandler, nullptr);
@@ -155,10 +145,12 @@ extern "C" void app_main() {
         vTaskDelay(2000 / portTICK_PERIOD_MS);
         auto endTime = high_resolution_clock::now();
         auto delayDurationInUs = duration_cast<microseconds>(endTime - startTime).count();
-        ESP_LOGI("main", "Counter: %lu; awake %.3f%% (%lu cycles)",
+        ESP_LOGI("main", "Counter: %lu; awake %.3f%% (%lu cycles) -- button pressed: %s",
             counter.exchange(0),
             (1.0 - ((double) sleepDurationInUs.exchange(0)) / ((double) delayDurationInUs)) * 100.0,
-            sleepCount.exchange(0));
+            sleepCount.exchange(0),
+            rtc_gpio_get_level(buttonGpio) ? "true" : "false");
+        fflush(stdout);
         startTime = endTime;
     }
 }
