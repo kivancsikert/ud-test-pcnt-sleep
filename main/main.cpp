@@ -52,7 +52,7 @@ static void buttonHandlerTask(void* arg) {
         // Wait for a button press event
         if (xQueueReceive(buttonQueue, &buttonState, portMAX_DELAY)) {
             // Print the received button state
-            ESP_LOGI("main", "Button pressed: %s", buttonState ? "true" : "false");
+            // ESP_LOGI("main", "Button pressed: %s", buttonState ? "true" : "false");
             rtc_gpio_wakeup_enable(buttonGpio, buttonState ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
             if (previousState != buttonState) {
                 previousState = buttonState;
