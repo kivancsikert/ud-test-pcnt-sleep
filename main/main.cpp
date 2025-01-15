@@ -28,8 +28,8 @@ bool timerRunning = false;
 esp_timer_handle_t timer = nullptr;
 
 static const gpio_num_t rgbLedGpio = GPIO_NUM_8;
-static const gpio_num_t ledGpio = GPIO_NUM_15;
-static const gpio_num_t buttonGpio = GPIO_NUM_9;
+static const gpio_num_t ledGpio = GPIO_NUM_23;
+static const gpio_num_t buttonGpio = GPIO_NUM_3;
 
 // static tNeopixelContext neopixel = neopixel_Init(1, rgbLedGpio);
 // static tNeopixel off = { 0, NP_RGB(0, 0, 0) };
@@ -46,25 +46,26 @@ void timerCallback(void* arg) {
 }
 
 void interruptHandler(void* arg) {
-    bool currentState = rtc_gpio_get_level(buttonGpio);
-    if (currentState) {
-        if (!previousState) {
-            ESP_ERROR_CHECK(esp_pm_lock_acquire(noSleep));
-            if (timerRunning) {
-                ESP_ERROR_CHECK(esp_timer_stop(timer));
-            }
-            esp_timer_start_once(timer, duration_cast<microseconds>(200ms).count());
-            timerRunning = true;
-        }
-    } else {
-        if (previousState) {
-            counter++;
-            ESP_ERROR_CHECK(esp_pm_lock_release(noSleep));
-            esp_timer_stop(timer);
-            timerRunning = false;
-        }
-    }
-    previousState = currentState;
+    counter++;
+    // bool currentState = rtc_gpio_get_level(buttonGpio);
+    // if (currentState) {
+    //     if (!previousState) {
+    //         ESP_ERROR_CHECK(esp_pm_lock_acquire(noSleep));
+    //         if (timerRunning) {
+    //             ESP_ERROR_CHECK(esp_timer_stop(timer));
+    //         }
+    //         esp_timer_start_once(timer, duration_cast<microseconds>(200ms).count());
+    //         timerRunning = true;
+    //     }
+    // } else {
+    //     if (previousState) {
+    //         counter++;
+    //         ESP_ERROR_CHECK(esp_pm_lock_release(noSleep));
+    //         esp_timer_stop(timer);
+    //         timerRunning = false;
+    //     }
+    // }
+    // previousState = currentState;
 }
 
 extern "C" void app_main() {
@@ -100,7 +101,7 @@ extern "C" void app_main() {
     esp_pm_config_t pm_config = {
         .max_freq_mhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
         .min_freq_mhz = CONFIG_XTAL_FREQ,
-        .light_sleep_enable = true,
+        .light_sleep_enable = false,
     };
     ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
 
@@ -112,23 +113,23 @@ extern "C" void app_main() {
     };
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer));
 
-    // gpio_install_isr_service(0);
+    gpio_install_isr_service(0);
 
-    // gpio_config_t config = {
-    //     .pin_bit_mask = 1ULL << buttonGpio,
-    //     .mode = GPIO_MODE_INPUT,
-    //     .pull_up_en = GPIO_PULLUP_DISABLE,
-    //     .pull_down_en = GPIO_PULLDOWN_ENABLE,
-    //     .intr_type = GPIO_INTR_ANYEDGE,
-    // };
-    // gpio_config(&config);
+    gpio_config_t config = {
+        .pin_bit_mask = 1ULL << buttonGpio,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_ANYEDGE,
+    };
+    gpio_config(&config);
 
-    // gpio_sleep_sel_dis(buttonGpio);
+    gpio_sleep_sel_dis(buttonGpio);
 
-    // rtc_gpio_wakeup_enable(buttonGpio, GPIO_INTR_HIGH_LEVEL);
-    // esp_sleep_enable_gpio_wakeup();
+    rtc_gpio_wakeup_enable(buttonGpio, GPIO_INTR_HIGH_LEVEL);
+    esp_sleep_enable_gpio_wakeup();
 
-    // gpio_isr_handler_add(buttonGpio, interruptHandler, nullptr);
+    gpio_isr_handler_add(buttonGpio, interruptHandler, nullptr);
 
     auto startTime = high_resolution_clock::now();
     while (true) {
